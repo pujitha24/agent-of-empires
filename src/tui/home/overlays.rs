@@ -152,25 +152,41 @@ impl HomeView {
         self.flash_status(status);
     }
 
-    /// Report a system opener that exited unsuccessfully, which is how a scheme
-    /// with no registered app fails; true when the flash changed.
-    pub fn tick_opener(&mut self) -> bool {
-        let mut failed = None;
+    /// Drain the system openers that have exited, returning the unsuccessful ones.
+    pub(super) fn take_failed_openers(&mut self) -> Vec<(String, std::process::ExitStatus)> {
+        let mut failed = Vec::new();
         self.opener_exits.retain(|(url, rx)| match rx.try_recv() {
             Ok(status) => {
                 if !status.success() {
-                    failed = Some((url.clone(), status));
+                    failed.push((url.clone(), status));
                 }
                 false
             }
             Err(std::sync::mpsc::TryRecvError::Empty) => true,
             Err(std::sync::mpsc::TryRecvError::Disconnected) => false,
         });
-        let Some((url, status)) = failed else {
-            return false;
+        failed
+    }
+
+    /// Report system openers that exited unsuccessfully, which is how a scheme
+    /// with no registered app fails; true when the flash changed.
+    pub fn tick_opener(&mut self) -> bool {
+        let failed = self.take_failed_openers();
+        let status = match failed.as_slice() {
+            [] => return false,
+            [(url, status)] => format!("nothing opened it ({status}); copied {url}"),
+            many => {
+                let urls: Vec<&str> = many.iter().map(|(url, _)| url.as_str()).collect();
+                format!(
+                    "nothing opened {} links; copied {}",
+                    many.len(),
+                    urls.join(" ")
+                )
+            }
         };
-        crate::tui::clipboard::copy_to_clipboard(&url);
-        self.flash_status(format!("nothing opened it ({status}); copied {url}"));
+        let urls: Vec<&str> = failed.iter().map(|(url, _)| url.as_str()).collect();
+        crate::tui::clipboard::copy_to_clipboard(&urls.join("\n"));
+        self.flash_status(status);
         true
     }
 

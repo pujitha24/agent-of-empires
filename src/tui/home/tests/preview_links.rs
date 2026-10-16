@@ -444,6 +444,30 @@ fn each_pending_opener_is_kept_until_its_own_exit_arrives() {
     assert!(env.view.opener_exits.is_empty());
 }
 
+#[cfg(unix)]
+#[test]
+fn openers_failing_before_one_poll_are_all_reported() {
+    use std::os::unix::process::ExitStatusExt;
+    let mut env = create_test_env_empty();
+    for (url, code) in [
+        ("vscode://file/a", 256),
+        ("vscode://file/ok", 0),
+        ("vscode://file/b", 512),
+    ] {
+        let (tx, rx) = std::sync::mpsc::channel();
+        tx.send(std::process::ExitStatus::from_raw(code)).unwrap();
+        env.view.opener_exits.push((url.to_string(), rx));
+    }
+    let failed: Vec<String> = env
+        .view
+        .take_failed_openers()
+        .into_iter()
+        .map(|(url, _)| url)
+        .collect();
+    assert_eq!(failed, ["vscode://file/a", "vscode://file/b"]);
+    assert!(env.view.opener_exits.is_empty());
+}
+
 #[test]
 #[serial]
 fn the_link_policy_reloads_on_its_own() {
