@@ -69,6 +69,15 @@ export function PluginsSettings({ readOnly = false }: { readOnly?: boolean } = {
     }
   };
 
+  useEffect(() => {
+    if (!confirmUninstall) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setConfirmUninstall(null);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [confirmUninstall]);
+
   const onConfirmUninstall = async () => {
     if (!confirmUninstall) return;
     const plugin = confirmUninstall;

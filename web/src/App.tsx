@@ -1752,7 +1752,8 @@ function AppContent({
           }
           setShowSessionWizard(false);
           setShowHelp(false);
-          if (showSettings) handleCloseSettings();
+          // A dialog inside Settings handles its own Escape; leave Settings open.
+          if (showSettings && !document.querySelector('[aria-modal="true"]')) handleCloseSettings();
           setShowAbout(false);
           setSelectedFile(null);
         },

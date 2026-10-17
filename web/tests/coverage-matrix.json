@@ -694,6 +694,13 @@
       "components": ["web/src/components/SettingsView.tsx"]
     },
     {
+      "id": "settings.dialog-escape",
+      "kind": "mocked-playwright",
+      "risk": "low",
+      "specs": ["tests/settings-dialog-escape.spec.ts"],
+      "components": ["web/src/App.tsx", "web/src/components/settings/PluginsSettings.tsx"]
+    },
+    {
       "id": "settings.search",
       "kind": "mocked-playwright",
       "risk": "medium",
