@@ -637,6 +637,23 @@ impl ServeLaunch {
             allowed_origin: self.allowed_origin.clone(),
         }
     }
+
+    /// Replay the recorded policy, overriding only what `requested` chooses:
+    /// port, host, exposure and passphrase. Tunnel naming is kept only while
+    /// the successor is still remote.
+    fn with_requested(&self, requested: ServeArgs) -> ServeArgs {
+        let mut args = self.to_serve_args(requested.passphrase);
+        args.core_only = requested.core_only;
+        args.port = requested.port;
+        args.host = requested.host;
+        args.remote = requested.remote;
+        args.no_tailscale = requested.no_tailscale;
+        if !requested.remote {
+            args.tunnel_name = None;
+            args.tunnel_url = None;
+        }
+        args
+    }
 }
 
 fn launch_file(name: &str) -> Result<crate::session::ResolvedDataFile> {
@@ -1857,7 +1874,10 @@ pub(crate) async fn restart_daemon_with_receipt(
 
     let launch = managed_launch(pid)?;
     let predecessor_passphrase = recall_serve_passphrase(&launch)?;
-    let mut args = override_args.unwrap_or_else(|| launch.to_serve_args(None));
+    let mut args = match override_args {
+        Some(requested) => launch.with_requested(requested),
+        None => launch.to_serve_args(None),
+    };
     args.passphrase = resolve_launch_passphrase(
         args.passphrase.take(),
         Some(predecessor_passphrase.as_deref()),
@@ -2421,6 +2441,46 @@ mod tests {
             allowed_origin: vec!["https://aoe.example.com:8443".to_string()],
             additional_fields: serde_json::Map::new(),
         }
+    }
+
+    #[test]
+    fn tui_restart_replays_recorded_policy_and_overrides_only_exposure() {
+        use clap::Parser;
+        let parse = |argv: &[&str]| {
+            let parsed = crate::cli::Cli::try_parse_from(argv).unwrap();
+            let Some(crate::cli::Commands::Serve(args)) = parsed.command else {
+                unreachable!();
+            };
+            args
+        };
+        let mut requested = parse(&[
+            "aoe",
+            "serve",
+            "--daemon",
+            "--port",
+            "8080",
+            "--remote",
+            "--host",
+            "127.0.0.1",
+        ]);
+        requested.passphrase = Some("fresh".to_string());
+
+        let args = sample_launch().with_requested(requested);
+        assert!(args.read_only && args.behind_proxy && args.cityhall);
+        assert_eq!(args.allowed_host, ["aoe.example.com"]);
+        assert_eq!(args.allowed_origin, ["https://aoe.example.com:8443"]);
+        assert!(matches!(args.auth, Some(AuthMode::Passphrase)));
+        assert_eq!(args.tunnel_name.as_deref(), Some("named"));
+        assert_eq!(args.port, Some(8080));
+        assert_eq!(args.host, "127.0.0.1");
+        assert!(args.remote && !args.no_tailscale);
+        assert_eq!(args.passphrase.as_deref(), Some("fresh"));
+
+        let local = sample_launch().with_requested(parse(&[
+            "aoe", "serve", "--daemon", "--port", "8080", "--host", "0.0.0.0",
+        ]));
+        assert!(local.read_only && !local.remote);
+        assert!(local.tunnel_name.is_none() && local.tunnel_url.is_none());
     }
 
     #[test]
