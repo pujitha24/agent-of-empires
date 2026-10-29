@@ -19,7 +19,8 @@ export function hasStartedBefore(session: Pick<SessionResponse, "acp_session_id"
   return !!session.acp_session_id && !session.import_pending;
 }
 
-/** A new Session (no events yet) whose Worker or first connection is still coming up. */
+/** A new Session (no events yet) whose Worker or first connection is still coming up. A running Worker is
+ *  already up, so a cold connection to it is not a startup. */
 export function isNewSessionStarting(
   state: AcpState,
   connection: ConnectionRetryState & Pick<AcpContext, "hasEverOpened">,
@@ -37,6 +38,7 @@ export function isNewSessionStarting(
     return false;
   const { status, hasEverOpened, reconnecting } = connection;
   return (
-    acpWorkerState === "resuming" || (!hasEverOpened && (reconnecting || status === "connecting" || status === "error"))
+    acpWorkerState === "resuming" ||
+    (acpWorkerState !== "running" && !hasEverOpened && (reconnecting || status === "connecting" || status === "error"))
   );
 }

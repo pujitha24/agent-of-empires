@@ -58,6 +58,11 @@ describe("isNewSessionStarting", () => {
       true,
     ],
     ["a resumed Session (it has events)", [state({ lastSeq: 7 }), connection(), "resuming", false], false],
+    [
+      "a cold connection to an already-running Worker",
+      [state(), connection({ status: "connecting", hasEverOpened: false }), "running", false],
+      false,
+    ],
     ["a reconnect after the first open", [state(), connection({ status: "connecting" }), "running", false], false],
     ["the Worker is running", [state(), connection(), "running", false], false],
     ["a startup error shows its own banner", [state({ startupError: "boom" }), connection(), "resuming", false], false],
